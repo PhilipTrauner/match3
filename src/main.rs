@@ -30,6 +30,9 @@ const LINE_WIDTH: f64 = 2.5;
 const ROWS: i32 = 5;
 const COLUMNS: i32 = 5;
 
+const USIZE_ROWS: usize = ROWS as usize;
+const USIZE_COLUMNS: usize = COLUMNS as usize;
+
 lazy_static! {
 	pub static ref TILE_SIZE: Size = Size {width: 100.0, height: 100.0};
 }
@@ -47,11 +50,6 @@ pub struct Size {
 	height: f64
 }
 
-pub struct Offset {
-	x: f64,
-	y: f64
-}
-
 #[derive(Copy, Clone, PartialEq, Debug)]
 struct Tile {
 	color: [f32; 4],
@@ -66,28 +64,6 @@ impl Tile {
 		}
 	}
 
-	/*
-	fn next_to(&self, tile: &Tile, offset: &Offset) -> bool {
-		let x1 = self.position.x + offset.x;
-		let y1 = self.position.y + offset.y;		
-		
-		let x2 = tile.position.x + offset.x;
-		let y2 = tile.position.y + offset.y;	
-
-		if x2 - TILE_SIZE.width == x1 || 
-			x2 + TILE_SIZE.width == x1 ||
-			x2 == x1 {
-			if y2 - TILE_SIZE.height == y1 || 
-				y2 + TILE_SIZE.height == y1 ||
-				y2 == y1 {
-				return true;
-			}
-		}
-		return false;
-	}
-	*/
-
-
 	fn set_color(&mut self, color: [f32; 4]) {
 		self.color = color;
 	}
@@ -99,7 +75,7 @@ impl Tile {
 
 pub struct App {
 	gl: GlGraphics,
-	tiles: [[Tile; COLUMNS as usize]; ROWS as usize],
+	tiles: [[Tile; USIZE_COLUMNS]; USIZE_ROWS],
 	last_clicked_tile_index: Option<[usize; 2]>,
 	update_required: bool
 }
@@ -184,7 +160,7 @@ impl App {
 						} else {
 							tiles[tile_index[0]][tile_index[1]].set_selected(true);
 							clicked_tile = Some(tile_index);
-							println!("{:?}", tile_index);
+							println!("clicked {:?}", tile_index);
 						}
 					}
 				}
@@ -194,7 +170,7 @@ impl App {
 			// No tile selected
 			None => {
 				// Unselect all tiles
-				for row in 0..ROWS as usize {
+				for row in 0..USIZE_ROWS {
 					for column in 0..COLUMNS {
 						tiles[row as usize][column as usize].set_selected(false);
 					}
@@ -216,72 +192,112 @@ impl App {
 				}
 				if self.last_clicked_tile_index.is_some() {
 					let unwrapped_last_clicked_tile_index = self.last_clicked_tile_index.unwrap();
-
 					if unwrapped_last_clicked_tile_index != unwrapped_clicked_tile_index {
-						// Hack to swap positions
-						// Same row
-						if unwrapped_clicked_tile_index[0] == unwrapped_last_clicked_tile_index[0] {
-							println!("same row");
-							let row = unwrapped_clicked_tile_index[0] as usize;
-							// Column 1 has to be the smaller one
-							let mut column_1: usize = 0;
-							let mut column_2: usize = 0;
-							if unwrapped_clicked_tile_index[1] < unwrapped_last_clicked_tile_index[1] {
-								column_1 = unwrapped_clicked_tile_index[1];
-								column_2 = unwrapped_last_clicked_tile_index[1];
-							} else {
-								column_1 = unwrapped_last_clicked_tile_index[1];
-								column_2 = unwrapped_clicked_tile_index[1];							
-							}
-							if !((column_1 + 1) >= COLUMNS as usize) {
-								let (x, y) = tiles[row].split_at_mut(column_1 + 1);
-								let x_length = x.len();
-								mem::swap(&mut x[column_1], &mut y[column_2 - x_length]);
-								x[column_1].set_selected(false);
-								y[column_2 - x_length].set_selected(false);
-							} else {
-								let (x, y) = tiles[row].split_at_mut(column_1 - 1);
-								let x_length = x.len();
-								mem::swap(&mut x[column_2], &mut y[column_1 - x_length]);
-								x[column_2].set_selected(false);
-								y[column_1 - x_length].set_selected(false);
-							}
-						// Different row
-						} else {
-							println!("different row (nyi)");
-							// Row 1 has to be the smaller one
-							let mut row_1: usize = 0;
-							let mut row_2: usize = 0;
-							if unwrapped_clicked_tile_index[0] < unwrapped_last_clicked_tile_index[0] {
-								row_1 = unwrapped_clicked_tile_index[0];
-								row_2 = unwrapped_last_clicked_tile_index[0];
-							} else {
-								row_1 = unwrapped_last_clicked_tile_index[0];
-								row_2 = unwrapped_clicked_tile_index[0];							
-							}
-							if !((row_1 + 1) >= ROWS as usize) {
-								let (x, y) = tiles.split_at_mut(row_1 + 1);
+						// Restrict movement in + shape
+						let mut row_1 = unwrapped_clicked_tile_index[0];
+						let mut column_1 = unwrapped_clicked_tile_index[1];
+						let mut row_2 = unwrapped_last_clicked_tile_index[0];
+						let mut column_2 = unwrapped_last_clicked_tile_index[1];
+						
+						let mut allowed_move = true;
 
+						if row_2 == 0 {
+							if row_1 == 1 && column_1 == 0 {
+								allowed_move = true;
+							} else if row_1 == 0 && column_1 == 1 {
+								allowed_move = true;
+							}
+						} else if row_2 == USIZE_ROWS {
+							if row_1 == USIZE_ROWS - 1 {
+								allowed_move = true;
+							}
+							if column_1 == USIZE_ROWS - 1 {
+								allowed_move = true;
+							}
+						} else if column_2 == 0 {
+							if column_1 == 1 {
+								allowed_move = true;
+							}
+						} else if column_2 == USIZE_COLUMNS {
+							if column_1 == USIZE_COLUMNS - 1 {
+								allowed_move = true;
 							}
 						}
-						self.last_clicked_tile_index = None;
-						swapped = true;
-						/*
-						let ref temp_tile = tiles[unwrapped_last_clicked_tile_index[0]][unwrapped_last_clicked_tile_index[1]];
-						tiles[unwrapped_clicked_tile_index[0]][unwrapped_clicked_tile_index[1]] = *temp_tile;
-						*/
-						/*
-						let clicked_tile_clone = self.tiles[unwrapped_clicked_tile].clone();
-						let last_clicked_tile_clone = self.tiles[unwrapped_last_clicked_tile].clone();
 
-						self.tiles[unwrapped_clicked_tile].set_selected(false);
-						self.tiles[unwrapped_last_clicked_tile].set_selected(false);
-						self.tiles[unwrapped_clicked_tile].set_position(last_clicked_tile_clone.position);
-						self.tiles[unwrapped_last_clicked_tile].set_position(clicked_tile_clone.position);
 
-						self.last_clicked_tile = None;
-						swapped = true;
-						*/
+
+						if allowed_move {
+						// Hack to swap positions (only one array element can be borrowed mutably)
+						// Same row
+							if unwrapped_clicked_tile_index[0] == unwrapped_last_clicked_tile_index[0] {
+								let row = unwrapped_clicked_tile_index[0] as usize;
+								// Column 1 has to be the smaller one
+								let mut column_1: usize = 0;
+								let mut column_2: usize = 0;
+								if unwrapped_clicked_tile_index[1] < unwrapped_last_clicked_tile_index[1] {
+									column_1 = unwrapped_clicked_tile_index[1];
+									column_2 = unwrapped_last_clicked_tile_index[1];
+								} else {
+									column_1 = unwrapped_last_clicked_tile_index[1];
+									column_2 = unwrapped_clicked_tile_index[1];							
+								}
+								let (x, y) = tiles[row].split_at_mut(column_1 + 1);
+								mem::swap(&mut x[column_1], &mut y[column_2 - (column_1 + 1)]);
+								x[column_1].set_selected(false);
+								y[column_2 - (column_1 + 1)].set_selected(false);
+								println!("swapped (same row) [{}, {}] [{}, {}]", row, column_1, row, column_2);
+							// Different row
+							} else {
+								// Row 1 has to be the smaller one
+								let mut row_1: usize = 0;
+								let mut row_2: usize = 0;
+								let mut column_1: usize = 0;
+								let mut column_2: usize = 0;
+								if unwrapped_clicked_tile_index[0] < unwrapped_last_clicked_tile_index[0] {
+									row_1 = unwrapped_clicked_tile_index[0];
+									row_2 = unwrapped_last_clicked_tile_index[0];
+									column_1 = unwrapped_clicked_tile_index[1];
+									column_2 = unwrapped_last_clicked_tile_index[1];
+								} else {
+									row_1 = unwrapped_last_clicked_tile_index[0];
+									row_2 = unwrapped_clicked_tile_index[0];
+									column_1 = unwrapped_last_clicked_tile_index[1];
+									column_2 = unwrapped_clicked_tile_index[1];							
+								}
+								let (x, y) = tiles.split_at_mut(row_1 + 1);
+								mem::swap(&mut x[row_1][column_1], &mut y[row_2 - (row_1 + 1)][column_2]);
+								x[row_1][column_1].set_selected(false);
+								y[row_2 - (row_1 + 1)][column_2].set_selected(false);
+								println!("swapped (different row) [{}, {}] [{}, {}]", row_1, column_1, row_2, column_2);
+							}
+							self.last_clicked_tile_index = None;
+							swapped = true;
+							let mut last_color: Option<[f32; 4]> = None; 
+							let mut color_count = 0;
+							/*
+							for row in 0..USIZE_ROWS {
+								for column in 0..COLUMNS {
+									if last_color.is_none() {
+										last_color = tiles[row][column].color;
+										color_count += 1;
+									}
+									if last_color.is_some() {
+										if last_color == tiles[row][column].color {
+											color_count += 1;
+										}
+									}
+									if color_count >= 3 {
+
+									}
+								}
+							}
+							for column in 0..USIZE_COLUMNS {
+								for row in 0..ROWS {
+									
+								}
+							}
+							*/					
+						}
 					}
 				}
 				if !swapped {
@@ -309,8 +325,8 @@ fn main() {
 
 	let colors = vec![RED, GREEN, BLUE];
 
-	let mut tiles: [[Tile; COLUMNS as usize]; ROWS as usize] = [
-		[Tile::new(WHITE); COLUMNS as usize]; ROWS as usize
+	let mut tiles: [[Tile; USIZE_COLUMNS]; USIZE_ROWS] = [
+		[Tile::new(WHITE); USIZE_COLUMNS]; USIZE_ROWS
 	];
 
 
